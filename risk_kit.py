@@ -191,32 +191,82 @@ def plot_ef2(n_points, er, covmat, style='.-'):
     return ef.plot.line(x='Vol', y='Return', style=style)
 
 
+def msr(riskfree_rate, er, cov):
+    #from scipy.optimize import minimize
+    """
+    Returns the weights of the portfolio that gives the maximum sharpe ratio
+    given the riskfree rate and expected return and a covariance matrix
+    """
+  
+    n = er.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0),) * n
+    
+    
+    weights_sum_to_1 = {
+        'type' : 'eq',
+        'fun' : lambda weights: np.sum(weights) - 1
+    }
+    
+    def neg_sharpe_ratio(weights, riskfree_rate, er, cov):
+        """
+        Returns the negative of the sharpe ratio, given weights
+        """
+        r = portfolio_return(weights, er)
+        vol = portfolio_vol(weights, cov)
+        return -(r - riskfree_rate)/vol
+        
+    
+    results = minimize(neg_sharpe_ratio, init_guess, 
+                       args=(riskfree_rate, er, cov,), method="SLSQP", 
+                       options={'disp' : False}, 
+                       constraints=(weights_sum_to_1), 
+                       bounds=bounds
+                      )
+    
+    return results.x
 
-def plot_ef(n_points, er, covmat):
+def plot_ef(n_points, er, cov, show_cml=False, style='.-', riskfree_rate=0):
     """ Plots N-asset efficient frontier"""
    
     weights = optimal_weights(n_points, er, cov)
     rets = [portfolio_return(w, er) for w in weights]
-    vols = [portfolio_vol(w, covmat) for w in weights]
+    vols = [portfolio_vol(w, cov) for w in weights]
     ef = pd.DataFrame({'Return':rets, 
                        'Vol': vols
                       })
     
-    return ef.plot.line(x='Volatility', y='Return', style=style)
+    ax = ef.plot.line(x='Vol', y='Return', style=style)
+    if show_cml:
+        ax.set_xlim(left=0)
+        w_msr = msr(riskfree_rate, er, cov)
+        r_msr = portfolio_return(w_msr, er)
+        vol_msr = portfolio_vol(w_msr, cov)
+        # Add CML
+        cml_x = [0, vol_msr]
+        cml_y = [riskfree_rate, r_msr]
+        ax.plot(cml_x, cml_y, color='green', 
+                marker='o', linestyle='dashed', 
+                markersize=12, linewidth=2)
+        
+        return ax
+        
 
 def optimal_weights(n_points, er, cov):
     """
     list of weights to run the optimizer on 
     """
-    target_rets = np.linspacxe(er.min(), er.max(), n_points)
+    target_rets = np.linspace(er.min(), er.max(), n_points)
     weights = [minimize_vol(target_return, er, cov) for target_return in target_rets]
     return weights
 
 from scipy.optimize import minimize
 
+
 def minimize_vol(target_return, er, cov):
+    #from scipy.optimize import minimize
     """
-    target return -> weight vector
+    target return -> weights vector
     """
   
     n = er.shape[0]
@@ -225,7 +275,7 @@ def minimize_vol(target_return, er, cov):
     
     return_is_target = {
         'type' : 'eq',
-        'arg' : (er, ),
+        'args' : (er,),
         'fun' : lambda weights, er: target_return - portfolio_return(weights, er)
     }
     
@@ -234,15 +284,14 @@ def minimize_vol(target_return, er, cov):
         'fun' : lambda weights: np.sum(weights) - 1
     }
     
-    results = mimimize(portfolio_vol, 
-                       init_guess, 
-                       args=(cov,), 
-                       method='SLSQP', 
+    results = minimize(portfolio_vol, init_guess, 
+                       args=(cov,), method="SLSQP", 
                        options={'disp' : False}, 
                        constraints=(return_is_target, weights_sum_to_1), 
-                       bounds=bounds)
+                       bounds=bounds
+                      )
     
-    return results.x 
+    return results.x
 
 
 
