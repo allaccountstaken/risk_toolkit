@@ -64,6 +64,8 @@ def get_ind_nfirms():
     ind.columns = ind.columns.str.strip()
     return ind
 
+def get_total_market_index_return():
+    pass
 
 
 def semideviation(r):
