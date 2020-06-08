@@ -340,7 +340,69 @@ def minimize_vol(target_return, er, cov):
 
 
 
+def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
+    """
+    Runs a backtest of the CPPI strategy, given a set of returns for the risky asset
+    Returns a dictionary with Asset Value, Risk Budget and Risk Weight histories
+    """
+    dates = risky_r.index
+    n_steps = len(dates)
+    account_value = start
+    floor_value = start * floor 
+    riskfree_rate = 0.03
+    peak = start
 
+    
+    if isinstance(risky_r, pd.Series):
+        risky_r = pd.DataFrame(risky_r, columns=['R'])
+        
+    if safe_r is None:
+        safe_r = pd.DataFrame().reindex_like(risky_r)
+        safe_r.values[:] = riskfree_rate/12
+
+    account_history = pd.DataFrame().reindex_like(risky_r)
+    cushion_history = pd.DataFrame().reindex_like(risky_r)
+    risky_w_history = pd.DataFrame().reindex_like(risky_r)
+
+    for step in range(n_steps):
+        if drawdown is not None:
+            peak = np.maximum(peak, account_value)
+            floor_value = peak * (1-drawdown)
+        
+        cushion = (account_value - floor_value) / account_value
+        risky_w = m * cushion
+        risky_w = np.minimum(risky_w, 1)
+        risky_w = np.maximum(risky_w, 0)
+        safe_w = 1 - risky_w
+        risky_alloc = account_value * risky_w
+        safe_alloc = account_value * safe_w
+
+        # update the account value for this time step
+        account_value = risky_alloc *(1 + risky_r.iloc[step]) + safe_alloc * (1 + safe_r.iloc[step])
+
+        # save values to look at the history 
+        cushion_history.iloc[step] = cushion
+        risky_w_history.iloc[step] = risky_w
+        account_history.iloc[step] = account_value
+        
+    
+    
+    risky_wealth = start * (1 + risky_r).cumprod()
+    backtest_result = {
+        "Wealth" : account_history,
+        "Risky Wealth" : risky_wealth,
+        "Risk Budget" : cushion_history,
+        "m" : m,
+        "start" : start,
+        "floor" : floor,
+        "risky_r" : risky_r,
+        "safe_r" : safe_r
+    }
+    
+    return backtest_result
+
+def summary_stats(r):
+    pass
 
     
     
