@@ -192,21 +192,25 @@ def plot_ef2(n_points, er, covmat, style='.-'):
 
 
 
-def plot_ef(n_points, er, covmat, style='.-'):
+def plot_ef(n_points, er, covmat):
     """ Plots N-asset efficient frontier"""
    
-    weights = minimize_vol(target_return)
+    weights = optimal_weights(n_points, er, cov)
     rets = [portfolio_return(w, er) for w in weights]
     vols = [portfolio_vol(w, covmat) for w in weights]
-    ef = pd.DataFrame({'Return':rets, 'Vol': vols})
+    ef = pd.DataFrame({'Return':rets, 
+                       'Vol': vols
+                      })
     
-    return ef.plot.line(x='Vol', y='Return', style=style)
+    return ef.plot.line(x='Volatility', y='Return', style=style)
 
 def optimal_weights(n_points, er, cov):
     """
     list of weights to run the optimizer on 
     """
-    
+    target_rets = np.linspacxe(er.min(), er.max(), n_points)
+    weights = [minimize_vol(target_return, er, cov) for target_return in target_rets]
+    return weights
 
 from scipy.optimize import minimize
 
@@ -233,7 +237,7 @@ def minimize_vol(target_return, er, cov):
     results = mimimize(portfolio_vol, 
                        init_guess, 
                        args=(cov,), 
-                       method='SLSQ', 
+                       method='SLSQP', 
                        options={'disp' : False}, 
                        constraints=(return_is_target, weights_sum_to_1), 
                        bounds=bounds)
