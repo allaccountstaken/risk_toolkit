@@ -164,13 +164,81 @@ def sharpe_ratio(r, rf_rate, periods_per_year):
 
 
 
+def portfolio_return(weights, returns):
+    """
+    Weights -> Returns
+    """
+    return weights.T @ returns 
+
+def portfolio_vol(weights, covmat):
+    """
+    Weights -> Vol
+    """
+    return (weights.T @ covmat @ weights) ** 0.5
 
 
 
+def plot_ef2(n_points, er, covmat, style='.-'):
+    """ Plots 2-asset efficient frontier"""
+    if er.shape[0] !=2 or er.shape[0] != 2:
+        raise ValueError('can only prlot 2-asset frontier')
+        
+    weights = [np.array([w, 1-w]) for w in np.linspace(0, 1, n_points)]
+    rets = [portfolio_return(w, er) for w in weights]
+    vols = [portfolio_vol(w, covmat) for w in weights]
+    ef = pd.DataFrame({'Return':rets, 'Vol': vols})
+    
+    return ef.plot.line(x='Vol', y='Return', style=style)
 
 
 
+def plot_ef(n_points, er, covmat, style='.-'):
+    """ Plots N-asset efficient frontier"""
+   
+    weights = minimize_vol(target_return)
+    rets = [portfolio_return(w, er) for w in weights]
+    vols = [portfolio_vol(w, covmat) for w in weights]
+    ef = pd.DataFrame({'Return':rets, 'Vol': vols})
+    
+    return ef.plot.line(x='Vol', y='Return', style=style)
 
+def optimal_weights(n_points, er, cov):
+    """
+    list of weights to run the optimizer on 
+    """
+    
+
+from scipy.optimize import minimize
+
+def minimize_vol(target_return, er, cov):
+    """
+    target return -> weight vector
+    """
+  
+    n = er.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0),) * n
+    
+    return_is_target = {
+        'type' : 'eq',
+        'arg' : (er, ),
+        'fun' : lambda weights, er: target_return - portfolio_return(weights, er)
+    }
+    
+    weights_sum_to_1 = {
+        'type' : 'eq',
+        'fun' : lambda weights: np.sum(weights) - 1
+    }
+    
+    results = mimimize(portfolio_vol, 
+                       init_guess, 
+                       args=(cov,), 
+                       method='SLSQ', 
+                       options={'disp' : False}, 
+                       constraints=(return_is_target, weights_sum_to_1), 
+                       bounds=bounds)
+    
+    return results.x 
 
 
 
