@@ -251,6 +251,7 @@ def gmv(cov):
     n = cov.shape[0]
     return msr(0, np.repeat(1, n), cov)
 
+
 def plot_ef(n_points, er, cov, show_cml=False, show_ew=False, show_gmv=False,
             style='.-', riskfree_rate=0):
     """ Plots N-asset efficient frontier"""
@@ -340,7 +341,7 @@ def minimize_vol(target_return, er, cov):
 
 
 
-def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
+def run_cppi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, riskfree_rate = 0.03, drawdown=None):
     """
     Runs a backtest of the CPPI strategy, given a set of returns for the risky asset
     Returns a dictionary with Asset Value, Risk Budget and Risk Weight histories
@@ -349,13 +350,11 @@ def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
     n_steps = len(dates)
     account_value = start
     floor_value = start * floor 
-    riskfree_rate = 0.03
-    peak = start
+    peak = account_value
 
     
     if isinstance(risky_r, pd.Series):
         risky_r = pd.DataFrame(risky_r, columns=['R'])
-        
     if safe_r is None:
         safe_r = pd.DataFrame().reindex_like(risky_r)
         safe_r.values[:] = riskfree_rate/12
@@ -363,12 +362,13 @@ def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
     account_history = pd.DataFrame().reindex_like(risky_r)
     cushion_history = pd.DataFrame().reindex_like(risky_r)
     risky_w_history = pd.DataFrame().reindex_like(risky_r)
+    floorval_history = pd.DataFrame().reindex_like(risky_r)
+    peak_history = pd.DataFrame().reindex_like(risky_r)
 
     for step in range(n_steps):
         if drawdown is not None:
             peak = np.maximum(peak, account_value)
             floor_value = peak * (1-drawdown)
-        
         cushion = (account_value - floor_value) / account_value
         risky_w = m * cushion
         risky_w = np.minimum(risky_w, 1)
@@ -384,7 +384,8 @@ def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
         cushion_history.iloc[step] = cushion
         risky_w_history.iloc[step] = risky_w
         account_history.iloc[step] = account_value
-        
+        floorval_history.iloc[step] = floor_value
+        peak_history.iloc[step] = peak
     
     
     risky_wealth = start * (1 + risky_r).cumprod()
@@ -392,21 +393,111 @@ def run_ccpi(risky_r, safe_r=None, m=3, start=1000, floor=0.8, drawdown=False):
         "Wealth" : account_history,
         "Risky Wealth" : risky_wealth,
         "Risk Budget" : cushion_history,
+        "Risk Allocation" : risky_w_history,
         "m" : m,
         "start" : start,
         "floor" : floor,
         "risky_r" : risky_r,
-        "safe_r" : safe_r
+        "safe_r" : safe_r,
+        "drawdown": drawdown,
+        "peak": peak_history,
+        "floor": floorval_history
     }
     
     return backtest_result
 
+    
+    
+    
+    
+    
+# Instructors code below:
 
-# Need to finish this function still...
-def summary_stats(r):
-    pass
+def run_cppi1(risky_r, safe_r=None, m=3, start=1000, floor=0.8, riskfree_rate=0.03, drawdown=None):
+    """
+    Run a backtest of the CPPI strategy, given a set of returns for the risky asset
+    Returns a dictionary containing: Asset Value History, Risk Budget History, Risky Weight History
+    """
+    # set up the CPPI parameters
+    dates = risky_r.index
+    n_steps = len(dates)
+    account_value = start
+    floor_value = start*floor
+    peak = account_value
+    if isinstance(risky_r, pd.Series): 
+        risky_r = pd.DataFrame(risky_r, columns=["R"])
+
+    if safe_r is None:
+        safe_r = pd.DataFrame().reindex_like(risky_r)
+        safe_r.values[:] = riskfree_rate/12 # fast way to set all values to a number
+    # set up some DataFrames for saving intermediate values
+    account_history = pd.DataFrame().reindex_like(risky_r)
+    risky_w_history = pd.DataFrame().reindex_like(risky_r)
+    cushion_history = pd.DataFrame().reindex_like(risky_r)
+    floorval_history = pd.DataFrame().reindex_like(risky_r)
+    peak_history = pd.DataFrame().reindex_like(risky_r)
+
+    for step in range(n_steps):
+        if drawdown is not None:
+            peak = np.maximum(peak, account_value)
+            floor_value = peak*(1-drawdown)
+        cushion = (account_value - floor_value)/account_value
+        risky_w = m*cushion
+        risky_w = np.minimum(risky_w, 1)
+        risky_w = np.maximum(risky_w, 0)
+        safe_w = 1-risky_w
+        risky_alloc = account_value*risky_w
+        safe_alloc = account_value*safe_w
+        # recompute the new account value at the end of this step
+        account_value = risky_alloc*(1+risky_r.iloc[step]) + safe_alloc*(1+safe_r.iloc[step])
+        # save the histories for analysis and plotting
+        cushion_history.iloc[step] = cushion
+        risky_w_history.iloc[step] = risky_w
+        account_history.iloc[step] = account_value
+        floorval_history.iloc[step] = floor_value
+        peak_history.iloc[step] = peak
+    risky_wealth = start*(1+risky_r).cumprod()
+    backtest_result = {
+        "Wealth": account_history,
+        "Risky Wealth": risky_wealth, 
+        "Risk Budget": cushion_history,
+        "Risky Allocation": risky_w_history,
+        "m": m,
+        "start": start,
+        "floor": floor,
+        "risky_r":risky_r,
+        "safe_r": safe_r,
+        "drawdown": drawdown,
+        "peak": peak_history,
+        "floor": floorval_history
+    }
+    return backtest_result
 
 
+
+
+def summary_stats(r, riskfree_rate=0.03):
+    """
+    Return a DataFrame that contains aggregated summary stats for the returns in the columns of r
+    """
+    ann_r = r.aggregate(annualize_rets, periods_per_year=12)
+    ann_vol = r.aggregate(annualize_vol, periods_per_year=12)
+    ann_sr = r.aggregate(sharpe_ratio, riskfree_rate=riskfree_rate, periods_per_year=12)
+    dd = r.aggregate(lambda r: drawdown(r).Drawdown.min())
+    skew = r.aggregate(skewness)
+    kurt = r.aggregate(kurtosis)
+    cf_var5 = r.aggregate(var_gaussian, modified=True)
+    hist_cvar5 = r.aggregate(cvar_historic)
+    return pd.DataFrame({
+        "Annualized Return": ann_r,
+        "Annualized Vol": ann_vol,
+        "Skewness": skew,
+        "Kurtosis": kurt,
+        "Cornish-Fisher VaR (5%)": cf_var5,
+        "Historic CVaR (5%)": hist_cvar5,
+        "Sharpe Ratio": ann_sr,
+        "Max Drawdown": dd
+    })
 
 
 def gbm(n_years = 10, n_scenarios=1000, mu=0.07, sigma=0.15, steps_per_year=12, s_0=100.0, prices=True):
@@ -430,5 +521,3 @@ def gbm(n_years = 10, n_scenarios=1000, mu=0.07, sigma=0.15, steps_per_year=12, 
     rets_plus_1[0] = 1
     ret_val = s_0*pd.DataFrame(rets_plus_1).cumprod() if prices else rets_plus_1-1
     return ret_val
-
-    
