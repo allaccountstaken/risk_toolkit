@@ -126,23 +126,29 @@ def var_hist(r, level=5):
         raise TypeError("Expected input Series or DataFrame")
 
         
+from scipy.stats import norm
+
 def var_gaussian(r, level=5, modified=False):
     """
-    Returns parametric Gaussian VaR at a certain level
-    Input r of Series or DataFrame type
+    Returns the Parametric Gauusian VaR of a Series or DataFrame
+    If "modified" is True, then the modified VaR is returned,
+    using the Cornish-Fisher modification
     """
-    # Computer z-score based on Gaussian
-    z = ss.norm.ppf(level/100)
-    # Modify z-score based on emperically observed skewness and kurtosis
+    # compute the Z score assuming it was Gaussian
+    z = norm.ppf(level/100)
     if modified:
+        # modify the Z score based on observed skewness and kurtosis
         s = skewness(r)
         k = kurtosis(r)
-        z = (z + z**2 - 1)*s/6 + (z**3 - 3*z)*(k-3)/24 - (2*z**3 - 5*z)*(s**2)/36
-             
-        
-  
-    return (r.mean() + z * r.std(ddof=0))
-    
+        z = (z +
+                (z**2 - 1)*s/6 +
+                (z**3 -3*z)*(k-3)/24 -
+                (2*z**3 - 5*z)*(s**2)/36
+            )
+    return -(r.mean() + z*r.std(ddof=0))
+
+
+
 
 def cvar_historic(r, level=5):
     """
